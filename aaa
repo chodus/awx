@@ -1,0 +1,578 @@
+One-time base setup on Kali (no Docker)
+Aim
+Stand up a local, vulnerable target (DVWA) + Burp Suite on Kali VM only.
+System requirements
+•	Kali VM (≥4 GB RAM, 20–50 GB disk), Firefox, Burp CE.
+•	You’ll run Apache + PHP + MariaDB directly on Kali. 
+Experiment 1_merged
+Steps (copy-paste in order)
+1.	Update & install LAMP + tools
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y apache2 mariadb-server php php-mysqli php-xml php-gd php-curl php-mbstring git unzip whatweb
+sudo systemctl enable --now apache2
+sudo systemctl enable --now mariadb
+2.	Secure MariaDB & make DVWA DB
+sudo mysql_secure_installation    # choose secure answers; set a root pwd
+sudo mysql -u root -p -e "CREATE DATABASE dvwa;
+CREATE USER 'dvwauser'@'localhost' IDENTIFIED BY 'DvwaPass123!';
+GRANT ALL PRIVILEGES ON dvwa.* TO 'dvwauser'@'localhost';
+FLUSH PRIVILEGES;"
+3.	Deploy DVWA to Apache docroot
+cd /tmp && git clone https://github.com/digininja/DVWA.git
+sudo mv DVWA /var/www/html/dvwa
+sudo chown -R www-data:www-data /var/www/html/dvwa
+sudo chmod -R 755 /var/www/html/dvwa
+cd /var/www/html/dvwa/config
+sudo cp config.inc.php.dist config.inc.php
+sudo sed -i "s/\$DB_HOST.*/\$DB_HOST = '127.0.0.1';/" config.inc.php
+sudo sed -i "s/\$DB_USER.*/\$DB_USER = 'dvwauser';/" config.inc.php
+sudo sed -i "s/\$DB_PASSWORD.*/\$DB_PASSWORD = 'DvwaPass123!';/" config.inc.php
+sudo sed -i "s/\$DB_DATABASE.*/\$DB_DATABASE = 'dvwa';/" config.inc.php
+sudo systemctl restart apache2
+
+
+
+4.	Initialize DVWA
+•	Open http://localhost/dvwa/setup.php → Create/Reset Database → login admin / password → set Security = Low for most labs. 
+Experiment 1_merged
+5.	Wire up Burp (HTTPS interception)
+•	Start Burp → Proxy listens on 127.0.0.1:8080 → In Firefox Settings → Network → Manual proxy set HTTP/HTTPS to 127.0.0.1:8080 → Visit http://burp to install CA cert (trust for websites). You should now see traffic in Proxy ▸ HTTP history. 
+
+🔹 EXPERIMENT 1 — Validate Lab Environment (Kali + DVWA + Burp)
+🎯 Aim
+Confirm that the vulnerable web app and Burp proxy are working correctly on Kali Linux.
+📘 Theory
+Burp Suite acts as a proxy between your browser and the target web app. Intercepting traffic lets you see and modify requests before they reach the server.
+________________________________________
+⚙️ Steps to Perform
+1.	Open Firefox inside Kali.
+o	Type in the address bar: http://localhost/dvwa
+o	Log in with:
+o	Username: admin
+o	Password: password
+o	You should see the DVWA Home page.
+2.	Open Burp Suite
+o	Applications → Web Application Analysis → Burp Suite Community Edition
+o	When it starts, select Temporary project → Use Burp defaults → Start Burp
+3.	Enable the Proxy
+o	In Burp → go to Proxy → Intercept tab.
+o	Ensure the button “Intercept is on” is highlighted in orange.
+4.	Browser Configuration
+o	In Firefox → Menu → Settings →
+scroll to Network Settings → Settings… → Manual proxy configuration
+o	HTTP Proxy: 127.0.0.1
+o	Port: 8080
+o	Check the box “Use this proxy for all protocols” → OK
+5.	Capture Traffic
+o	Go back to Firefox and refresh the DVWA page.
+o	In Burp → Proxy → HTTP history tab, you should now see requests like /dvwa/login.php.
+6.	Disable Intercept (for normal browsing)
+o	Click the “Intercept is on” button once — it will change to “Intercept is off”.
+________________________________________
+📸 Evidence to Capture
+•	Screenshot of Burp showing intercepted DVWA traffic (Proxy → HTTP history tab)
+•	Screenshot of DVWA Home page after login
+✅ Expected Result
+•	Burp successfully captures all requests.
+•	DVWA loads and functions normally.
+🧩 Conclusion
+Your Kali lab environment is correctly configured; you can now test and manipulate traffic using Burp.
+________________________________________
+🔹 EXPERIMENT 2 — Website Crawling Using Burp Spider & Site Map
+🎯 Aim
+Automatically and manually crawl the DVWA application to identify all available pages, forms, and parameters.
+📘 Theory
+Crawling (or spidering) helps you discover every endpoint, hidden form, and directory — forming the foundation for vulnerability testing.
+________________________________________
+⚙️ Steps to Perform
+1.	Ensure Burp Proxy is running and intercept is off.
+o	(We want to let traffic pass freely for mapping.)
+2.	In Firefox, open DVWA:
+o	Navigate through all modules from the left sidebar:
+o	Home → Instructions → Setup → Brute Force → Command Injection → CSRF
+o	→ File Inclusion → SQL Injection → XSS (Reflected) → XSS (Stored)
+o	As you click through, Burp will collect all these requests.
+3.	In Burp:
+o	Go to Target → Site map.
+o	Expand http://localhost.
+o	You’ll see a tree structure of all discovered DVWA pages.
+4.	(Optional) Right-click the target domain (http://localhost)
+→ Select “Spider this host” (if using Burp Pro).
+(In Community Edition, manual browsing works the same way.)
+5.	To review the crawl results:
+o	Click a file (e.g., /dvwa/vulnerabilities/sqli/) in the Site map.
+o	Check Request and Response tabs below to view the raw data.
+6.	Export the crawl:
+o	Right-click → Copy URLs in this host → Paste into a text file dvwa_urls.txt.
+________________________________________
+📸 Evidence to Capture
+•	Screenshot of Target → Site map with expanded /dvwa/ tree
+•	Screenshot of the Request/Response pane showing one page’s details
+✅ Expected Result
+Burp lists every DVWA module and its parameters.
+🧩 Conclusion
+You’ve successfully mapped the entire attack surface for future experiments.
+________________________________________
+🔹 EXPERIMENT 3 — Using Burp Repeater for Manual Testing
+🎯 Aim
+Use Burp’s Repeater tool to manually modify HTTP requests and verify vulnerabilities such as SQL injection.
+📘 Theory
+Repeater allows you to resend a captured request multiple times with modified parameters — useful for confirming vulnerabilities safely.
+________________________________________
+⚙️ Steps to Perform
+1.	Go to DVWA → SQL Injection (Low) from the left menu.
+2.	In the input field labeled “User ID”, type 1 → Click Submit.
+o	You’ll see some user data on the page.
+3.	Capture the request:
+o	In Burp → go to Proxy → HTTP history
+o	Find the request to /dvwa/vulnerabilities/sqli/
+o	Right-click that request → Send to Repeater
+4.	Open the Repeater Tab:
+o	Click Repeater (top bar)
+o	You’ll see the raw HTTP request on the left and the response on the right.
+5.	Test a normal query:
+o	Click Send
+o	Note the HTTP status (200 OK) and response body.
+6.	Now inject a payload:
+o	In the request body or URL parameter (after id=), change:
+o	id=1
+to
+id=1' OR '1'='1
+o	Click Send
+o	Observe the difference in response (e.g., more data or error).
+7.	Document findings:
+o	Copy both responses to a text file for evidence.
+________________________________________
+📸 Evidence to Capture
+•	Screenshot of the Repeater tab showing request and response (before and after payload)
+•	Highlight where the payload is injected
+✅ Expected Result
+The second response reveals different data, confirming SQLi vulnerability.
+🧩 Conclusion
+Burp Repeater can precisely confirm vulnerabilities by comparing server responses to controlled input changes.
+
+
+________________________________________
+🧩 EXPERIMENT 4 — Target Identification & Tech-Stack Fingerprinting
+🎯 Aim
+Identify what technologies, versions, and headers the web application is running.
+📘 Theory
+Every web server leaks small clues — response headers, CMS signatures, and open ports. These help analysts understand possible vulnerabilities (e.g., outdated Apache, PHP).
+________________________________________
+⚙️ Steps to Perform
+🖥️ Using Firefox
+1.	Open http://localhost/dvwa
+2.	Press F12 → Network tab → refresh the page.
+3.	Click the first entry (e.g., index.php) → under Headers, note:
+o	Server: (usually Apache/2.x)
+o	X-Powered-By: (PHP/8.x)
+o	Content-Type:
+Screenshot these headers.
+💻 Using Terminal
+4.	Open a new terminal and run:
+5.	curl -I http://localhost/dvwa
+→ This prints the raw response headers.
+6.	Run a fingerprinting scan:
+7.	whatweb http://localhost/dvwa
+It should report something like:
+Apache[2.4.57], PHP[8.2.10], HTML5, Cookies
+🧰 Using Burp
+6.	In Burp → Proxy → HTTP history, click the /dvwa/index.php request.
+7.	Under Response, switch to the Headers tab.
+Note the same header information there.
+________________________________________
+📸 Evidence
+•	Screenshot of Firefox Network Headers
+•	Screenshot of Burp Response Headers
+•	curl / whatweb command outputs saved in a text file
+✅ Expected Result
+You should identify that the app runs Apache + PHP on localhost with default modules.
+🧩 Conclusion
+Header analysis and fingerprinting successfully revealed the stack details that would guide deeper tests (e.g., outdated modules, default configs).
+________________________________________
+🧩 EXPERIMENT 5 — Passive Reconnaissance / OSINT (For Authorized Domains)
+🔐 This lab shows the tools — only use them on domains you own or are permitted to test.
+🎯 Aim
+Perform passive reconnaissance using DNS, WHOIS, and public certificate data.
+📘 Theory
+Passive OSINT collects information without sending direct attacks — purely observation of public data sources.
+________________________________________
+⚙️ Steps
+🖥️ In Terminal
+1.	Create a folder to save recon data:
+2.	mkdir ~/osint_lab && cd ~/osint_lab
+3.	Check DNS records:
+4.	dig example.com any +noall +answer > dns.txt
+5.	View domain registration:
+6.	whois example.com > whois.txt
+7.	Find technologies in use:
+8.	whatweb https://example.com > tech.txt
+9.	Open browser → visit
+https://crt.sh/ → search for %25.example.com
+Save the certificate list as screenshot.
+📊 Review
+6.	Open each text file in cat or less and note:
+o	IP addresses
+o	Name servers
+o	Technologies (Apache, Cloudflare, etc.)
+________________________________________
+📸 Evidence
+•	Screenshots of terminal commands
+•	crt.sh results page
+✅ Expected Result
+Public information about the selected authorized domain is gathered and documented.
+🧩 Conclusion
+Passive OSINT identified domain footprint without interacting directly with servers.
+________________________________________
+🧩 EXPERIMENT 6 — Session-Management Vulnerabilities
+🎯 Aim
+Test how DVWA handles session IDs, fixation, cookie flags, logout, and timeout.
+📘 Theory
+A session cookie (PHPSESSID) authenticates a user. Weaknesses (no regeneration, missing HttpOnly/Secure) allow hijacking.
+________________________________________
+⚙️ Steps
+1️⃣ Check Session Cookie Attributes
+1.	In Firefox, log in to DVWA (admin/password).
+2.	Press F12 → Storage → Cookies → select http://localhost.
+o	Find PHPSESSID
+o	Observe if columns HttpOnly, Secure, or SameSite are set (usually they’re blank).
+o	Take a screenshot.
+3.	In Burp → Proxy → HTTP history, click a logged-in request.
+o	Under Response Headers, find Set-Cookie: and note its flags.
+2️⃣ Test Session Fixation
+4.	Logout from DVWA.
+5.	In Burp → Proxy → Intercept is on, visit any DVWA page (before login).
+o	Right-click request → Do Intercept → Response to this request.
+o	In the Request pane, add header manually:
+o	Cookie: PHPSESSID=testfixation
+o	Forward the request until login page appears.
+6.	Now log in normally (admin/password).
+7.	In Firefox Storage → Cookies, check if the PHPSESSID value is still testfixation.
+o	If yes → session fixation vulnerability exists.
+3️⃣ Test Logout & Timeout
+8.	Click Logout on DVWA left menu.
+9.	Try pressing the Back button or re-entering a previously copied /vulnerabilities/sqli/ URL.
+o	If page loads without relogin, logout didn’t invalidate session.
+10.	Wait 15 minutes idle, then reload a page — if still logged in, there’s no idle timeout.
+________________________________________
+📸 Evidence
+•	Screenshots of cookie flags
+•	Screenshot proving same PHPSESSID before/after login
+•	Screenshot showing page access after logout
+✅ Expected Result
+DVWA’s low-security mode will show missing flags, no regeneration, and insecure logout.
+🧩 Conclusion
+Observed weak session handling. Secure fix → regenerate ID after login (session_regenerate_id(true);) and set cookies with:
+HttpOnly; Secure; SameSite=Lax
+________________________________________
+🧩 EXPERIMENT 7 — Brute-Force Attack on Login Page
+🎯 Aim
+Demonstrate how repeated login attempts with a password list can break weak credentials.
+📘 Theory
+Brute force testing automates login attempts. DVWA’s Brute Force module illustrates rate-limit and weak-password issues.
+________________________________________
+⚙️ Steps
+🔹 Inside DVWA
+1.	From left menu choose “Brute Force”.
+2.	In the form fields:
+o	Username → admin
+o	Password → try a wrong password like 1234
+o	Click Login
+o	Observe message “Username and/or password incorrect.”
+🔹 Capture the Request
+3.	Open Burp → Proxy → HTTP history.
+o	Click the /vulnerabilities/brute/ request.
+o	Confirm the method = POST and see parameters:
+o	username=admin&password=1234&Login=Login
+o	Note that failure text contains incorrect — we’ll use it as our fail-string.
+🔹 Run Hydra from Kali Terminal
+4.	In terminal, execute:
+5.	hydra -l admin -P /usr/share/wordlists/rockyou.txt 127.0.0.1 http-post-form "/dvwa/vulnerabilities/brute/:username=^USER^&password=^PASS^&Login=Login:F=incorrect"
+🧠 Breakdown
+-l admin → username
+-P → wordlist path
+URL path → endpoint
+F=incorrect → failure condition
+6.	Let Hydra run a few seconds; it should find:
+7.	[80][http-post-form] host: 127.0.0.1   login: admin   password: password
+8.	Press Ctrl +C to stop after success.
+________________________________________
+📸 Evidence
+•	Screenshot of Burp HTTP history showing POST request
+•	Screenshot of Hydra output with cracked credentials
+✅ Expected Result
+Hydra successfully finds the valid password (“password”) for user admin.
+🧩 Conclusion
+DVWA’s login form is vulnerable to brute-force because it lacks rate-limiting and account lockout.
+Mitigation: Add CAPTCHA, exponential back-off, and multi-factor authentication.
+________________________________________
+As per esep list
+
+
+
+You got it, Aditya. Below is a from-zero, click-by-click walkthrough for every experiment in your PDF — exactly what to open, where to click, what to type, and how to verify the output on your Kali VM with DVWA + Burp. I’ve matched each item to your PDF list. 
+________________________________________
+0) Before you start (quick sanity checks)
+•	Open Firefox → go to http://localhost/dvwa → Login: admin / password.
+•	Open Burp Suite → Temporary project → Start Burp.
+•	In Firefox: Settings → Network → Manual proxy → HTTP & HTTPS proxy 127.0.0.1, port 8080.
+•	In Burp → Proxy → Intercept: click until it shows Intercept is off (so you can browse smoothly).
+(We’ll enable Intercept only when needed.) 
+________________________________________
+1) Crawl with Burp Spider / Site Map
+PDF: Identify and Manage vulnerabilities by Crawling the web application using Burp Spider/Site Map 
+Steps
+1.	Firefox → http://localhost/dvwa (through Burp).
+2.	In DVWA left menu, click through every item one by one:
+o	Home → Instructions → Setup → Brute Force → Command Injection → CSRF → File Inclusion → File Upload → SQL Injection → XSS (Reflected) → XSS (Stored), etc.
+3.	Burp → Target → Site map → expand http://localhost → expand /dvwa/.
+4.	Right-click the host → Copy URLs in this host → paste into a text file dvwa_urls.txt.
+5.	Click a specific path (e.g., /dvwa/vulnerabilities/sqli/) → bottom pane Request/Response to review details.
+Output to check
+•	Site map tree shows all DVWA endpoints with parameters.
+•	dvwa_urls.txt contains the URLs you just copied.
+(Take a screenshot of Site map with /dvwa/ expanded.) 
+________________________________________
+2) Replaying requests with Repeater
+PDF: Identify and Manage vulnerabilities by Replaying web requests using the Repeater tab. 
+Steps
+1.	DVWA → SQL Injection → in “User ID” type 1 → Submit.
+2.	Burp → Proxy → HTTP history → click the request to /dvwa/vulnerabilities/sqli/.
+3.	Right-click → Send to Repeater.
+4.	Go to Repeater tab → click Send (baseline).
+5.	In the request (look for id=1), change to:
+6.	id=1' OR '1'='1
+→ click Send again.
+7.	Compare the Response pane (status/body/length) for behavior change.
+Output to check
+•	Response difference (e.g., extra rows, error banners) proves parameter is injectable.
+(Screenshot Repeater with the modified request and the changed response.) 
+________________________________________
+3) Identify target tech stack, URLs, endpoints
+PDF: Identify the target web application and gather relevant information… technology stack, URLs, endpoints… 
+Steps
+In Firefox DevTools
+1.	Press F12 → Network tab → refresh DVWA.
+2.	Click index.php → Headers: note Server, X-Powered-By, Content-Type. Take a screenshot.
+In Burp
+3) Proxy → HTTP history → click DVWA responses → check Response → Headers for the same data.
+In Terminal
+4) Run:
+curl -I http://localhost/dvwa
+whatweb http://localhost/dvwa
+Save outputs to tech.txt.
+Output to check
+•	You can list: Apache version, PHP version, key headers, and main URLs (from Step #1). 
+________________________________________
+4) OSINT (only for authorized external domains)
+PDF: Use OSINT techniques… 
+Steps (example with example.com)
+1.	Terminal:
+2.	mkdir -p ~/osint && cd ~/osint
+3.	dig example.com any +noall +answer > dns.txt
+4.	whois example.com > whois.txt
+5.	whatweb https://example.com > tech.txt
+6.	Browser → open https://crt.sh → search %25.example.com → screenshot results.
+Output to check
+•	dns.txt, whois.txt, tech.txt, and a screenshot of crt.sh results. 
+________________________________________
+5) Session Management Vulnerabilities (Mutillidae/DVWA)
+PDF: Identify Session Management Vulnerabilities in Mutillidae/DVWA 
+Steps
+1.	DVWA → Login.
+2.	Firefox → F12 → Storage → Cookies → http://localhost → click PHPSESSID.
+o	Check columns: HttpOnly, Secure, SameSite (often blank at Low). Screenshot.
+3.	Burp → Proxy → HTTP history → open the login response → Response → Headers → view Set-Cookie flags; screenshot.
+4.	Session fixation:
+o	DVWA Logout.
+o	Burp → Proxy → Intercept is on.
+o	Visit any DVWA page; in Request add header:
+o	Cookie: PHPSESSID=testfix
+→ Forward to login page.
+o	Now login normally. Firefox Storage → Cookies: confirm PHPSESSID equals testfix. If yes → fixation.
+5.	Logout test: DVWA Logout, then press Back or reuse a captured authenticated URL; if it opens, logout is weak.
+6.	Idle timeout: leave tab idle 15 minutes; refresh; if still logged in, no idle timeout.
+Output to check
+•	Screenshots: cookie flags, fixation persistence, post-logout access. 
+________________________________________
+6) Brute-forcing authentication
+PDF: Identify Brute forcing the authentication of Mutillidae/DVWA 
+Steps
+1.	DVWA → Brute Force page. Enter admin / wrong password 1234 → Login.
+2.	Burp → Proxy → HTTP history → click the POST to /vulnerabilities/brute/.
+o	Note form fields (e.g., username, password, Login).
+o	Note failure text (e.g., contains “incorrect”).
+3.	Terminal (Hydra attack against local):
+4.	hydra -l admin -P /usr/share/wordlists/rockyou.txt 127.0.0.1 http-post-form "/dvwa/vulnerabilities/brute/:username=^USER^&password=^PASS^&Login=Login:F=incorrect"
+5.	Watch for success line (e.g., login: admin password: password).
+Output to check
+•	Burp screenshot of the login POST.
+•	Terminal screenshot showing Hydra success (username/password). 
+________________________________________
+7) Detecting XSS (Reflected & Stored)
+PDF: Detecting XSS Vulnerabilities… Perform reflected XSS attack and stored XSS attack 
+Reflected XSS (DVWA)
+1.	DVWA → XSS (Reflected).
+2.	In the input, enter:
+3.	<script>alert('XSS')</script>
+→ Submit.
+4.	An alert pops up. Screenshot with alert visible.
+Stored XSS (DVWA)
+4.	DVWA → XSS (Stored).
+5.	In Message/Comment field enter:
+6.	<script>alert('STORED')</script>
+→ Sign/Submit.
+7.	Open the page/list where your message displays; alert should pop. Screenshot.
+Output to check
+•	Two screenshots: Reflected alert; Stored alert.
+•	Burp saved request(s) (right-click → Save item) showing your payload. 
+________________________________________
+8) Detect CSRF + Prevent via JavaScript (double-submit) + Detect via Burp
+PDF: Detecting CSRF Vulnerabilities… Prevent CSRF using JavaScript; Detect CSRF using Burp Suite 
+Detect CSRF (exploit)
+1.	DVWA → CSRF page (action like change password).
+2.	Burp → Proxy → HTTP history → click that POST → note fields (e.g., password_new, password_conf).
+3.	Create a local file csrf_attack.html with:
+4.	<form action="http://localhost/dvwa/vulnerabilities/csrf/" method="POST">
+5.	  <input type="hidden" name="password_new" value="hacked123">
+6.	  <input type="hidden" name="password_conf" value="hacked123">
+7.	  <input type="submit" value="Do CSRF">
+8.	</form>
+9.	In Firefox (same logged-in session): File → Open File → open csrf_attack.html → Do CSRF.
+10.	If password changes, DVWA is vulnerable. Screenshot result + Burp request.
+Prevent CSRF using JavaScript (double-submit cookie)
+(Quick lab patch — you can revert later.)
+1.	Edit /var/www/html/dvwa/vulnerabilities/csrf/csrf.php and add:
+o	Script to set csrf_ds_token cookie and add hidden form field on submit (as given earlier).
+o	PHP check:
+o	if($_SERVER['REQUEST_METHOD']==='POST'){
+o	  $c=$_COOKIE['csrf_ds_token']??''; $p=$_POST['csrf_ds_token']??'';
+o	  if(empty($c)||empty($p)||!hash_equals($c,$p)){ echo "<h3 style='color:red'>Invalid CSRF token</h3>"; exit; }
+o	}
+2.	Restart Apache if needed: sudo systemctl restart apache2.
+3.	Repeat the attack from csrf_attack.html (with no cookie). Expect rejection message.
+4.	In Burp, confirm Cookie header has csrf_ds_token and POST body has csrf_ds_token when using the legitimate DVWA form.
+Detect using Burp
+•	Burp → Proxy → HTTP history → compare legit form (has token cookie + hidden field) vs malicious HTML (no/mismatched token). Save both.
+Output to check
+•	Pre-mitigation: attack succeeds.
+•	Post-mitigation: server shows “Invalid CSRF token”.
+•	Burp screenshots showing token presence/absence. 
+________________________________________
+9) SQLi: Bypass Authentication
+PDF: Examine SQL Injection: Bypassing Authentication using SQL injection 
+Steps (login form)
+1.	DVWA Login page → Username: admin; Password:
+2.	' OR '1'='1' --
+→ Login.
+3.	If it logs in, bypass worked. Screenshot logged-in page.
+4.	Burp → HTTP history → save the POST showing injected password.
+Output to check
+•	Successful login without correct password (screenshot + saved request). 
+________________________________________
+10) SQLi: Extract data via UNION
+PDF: Examine SQL Injection: Extracting Data using the UNION attack 
+Steps (DVWA SQL Injection page)
+1.	In “User ID”, find column count:
+2.	1' ORDER BY 1-- -
+3.	1' ORDER BY 2-- -
+4.	1' ORDER BY 3-- -
+Note the highest that works (say it’s 2).
+5.	Try UNION:
+6.	1' UNION SELECT user, password FROM users -- -
+→ Submit.
+7.	If output shows usernames & hashes, copy them into hashes.txt.
+Output to check
+•	Page displays DB users/hashes (screenshot).
+•	hashes.txt saved. 
+________________________________________
+11) SQLi: Blind (Boolean/Time-based)
+PDF: Examine SQL Injection: Blind SQL injection 
+Steps (time-based example)
+1.	In “User ID”:
+2.	1' AND IF(1=1, SLEEP(5), 0) -- -
+→ Submit (page delays ~5s).
+3.	Try char test (first char of first user’s password equals ‘a’):
+4.	1' AND IF(SUBSTR((SELECT password FROM users LIMIT 1),1,1)='a', SLEEP(5), 0) -- -
+5.	Burp → HTTP history → check Response time column for 5s requests. Screenshot.
+Output to check
+•	Noticeable delay indicates TRUE branch executed → blind SQLi proven. 
+________________________________________
+12) Extended SQLi: Read DB Password Hashes & Crack
+PDF: Extended SQLi… Reading Database Password Hashes 
+Steps
+1.	Use UNION from #10 to dump user,password. Save to ~/hashes.txt (one per line).
+2.	Terminal (on Kali):
+3.	john --wordlist=/usr/share/wordlists/rockyou.txt ~/hashes.txt
+4.	john --show ~/hashes.txt
+5.	Save output to john_output.txt.
+Output to check
+•	john prints recovered plaintexts. Screenshot + save to file. 
+________________________________________
+13) Extended SQLi: Protecting against SQLi
+PDF: Extended SQLi… Protecting against SQL injection 
+Steps (prove fix)
+1.	Edit a vulnerable PHP query (DVWA sample page used in #10). Replace concatenation with prepared statements (PDO/MySQLi). Example (PDO):
+2.	$stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
+3.	$stmt->execute([$_GET['id']]);
+4.	Restart Apache if needed.
+5.	Re-run payloads from #10/#11 → they should no longer work (no extra rows or delay).
+6.	Screenshot before/after behavior.
+Output to check
+•	Attacks are inert after fix; screenshots show same input now harmless. 
+________________________________________
+14) Extended SQLi: Read files from the server (safe demonstration)
+PDF: Extended SQLi… Reading Files from the Target Web Server 
+Only on your VM. Some DVWA configs won’t allow this; that’s OK — capturing the DB error still proves attempted vector.
+Steps
+1.	In “User ID”, try:
+2.	1' UNION SELECT LOAD_FILE('/etc/passwd'), NULL -- -
+(Adjust column count with NULLs.)
+3.	If allowed, the page prints file text; otherwise you’ll see an error about permissions/secure_file_priv. Screenshot either result.
+Output to check
+•	Proof of read (content dump) or DB error message proving the attempt vector. 
+________________________________________
+15) Extended SQLi: Write files to the server (safe, benign HTML + rollback)
+PDF: Extended SQLi… Writing Files into the Target Web Server 
+Take a VM snapshot first. Write a benign HTML file only.
+Steps
+1.	Determine column count (#10).
+2.	Try writing a benign file to webroot:
+3.	1' UNION SELECT '<html><body><h1>SQLi test</h1></body></html>', NULL INTO OUTFILE '/var/www/html/dvwa/sqli_test.html' -- -
+(Pad with NULL for your column count.)
+4.	If DB blocks it with secure_file_priv, write to that directory (e.g., /var/lib/mysql-files/) then move with:
+5.	sudo mv /var/lib/mysql-files/sqli_test.html /var/www/html/dvwa/sqli_test.html
+6.	Verify in browser: http://localhost/dvwa/sqli_test.html (screenshot).
+7.	Cleanup:
+8.	sudo rm -f /var/www/html/dvwa/sqli_test.html
+(Or revert snapshot.)
+Output to check
+•	Burp Repeater screenshot with payload.
+•	Browser screenshot showing the HTML page.
+•	Cleanup confirmation. 
+________________________________________
+16) (Optional) CSRF detection using only Burp
+PDF: Detecting CSRF… Detect CSRF attack using Burp Suite 
+Steps
+1.	Legit action: DVWA CSRF form → submit → Burp HTTP history → save the POST (right-click → Save item).
+2.	In Proxy → HTTP history, right-click the legit POST → Send to Repeater.
+3.	In Repeater, remove any anti-CSRF token parameter (if present) → Send.
+4.	If server still accepts → vulnerable; if it rejects → protection present. Screenshot the response.
+Output to check
+•	Repeater result: accepted (vulnerable) vs rejected (protected). 
+________________________________________
+Evidence checklist (what to submit)
+Create ~/awx_lab_evidence/ and save:
+•	Crawl: Site map screenshot + dvwa_urls.txt.
+•	Repeater: before/after response screenshots.
+•	Tech stack: Firefox Headers screenshot + tech.txt.
+•	OSINT: dns.txt, whois.txt, tech.txt, crt.sh screenshot.
+•	Session: cookie flags, fixation before/after, logout/timeout screenshots.
+•	Brute force: Burp POST + Hydra success screenshot.
+•	XSS: Reflected & Stored alert screenshots + saved Burp requests.
+•	CSRF: attack success, JS-mitigation rejection, Burp token comparison screenshots.
+•	SQLi: auth bypass screenshot; UNION dump + hashes.txt; blind timing screenshot; john_output.txt.
+•	Extended SQLi: LOAD_FILE result/error screenshot; sqli_test.html page + cleanup proof. 
+________________________________________
+If you want, I can package these steps as printable 1-page checklists per experiment (so you can keep one tab open and tick them off during your lab).
+
